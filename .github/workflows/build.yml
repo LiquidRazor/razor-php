@@ -107,11 +107,8 @@ jobs:
           tags: |
             # GHCR rolling
             ${{ env.GHCR_NS }}/php:${{ matrix.tags }}
-            # Docker Hub rolling
             docker.io/${{ env.DOCKERHUB_NS }}/php:${{ matrix.tags }}
-            # GHCR immutable patch (e.g., 8.4.11-fpm)
             ${{ env.GHCR_NS }}/php:${{ env[matrix.php_version_env] }}-${{ matrix.target }}
-            # Docker Hub immutable patch
             docker.io/${{ env.DOCKERHUB_NS }}/php:${{ env[matrix.php_version_env] }}-${{ matrix.target }}
 
       - name: Capture image digest
