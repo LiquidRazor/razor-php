@@ -22,8 +22,8 @@ env:
   COSIGN_YES: "true"
 
   # Patch versions (immutable tag source)
-  PHP_84: 8.4.11
-  PHP_83: 8.3.13
+  PHP_84: 8.4.12
+  PHP_83: 8.3.25
 
 jobs:
   build:
@@ -118,7 +118,7 @@ jobs:
       - name: Generate SBOM (SPDX)
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ env.GHCR_NS }}/php-src@${{ steps.digest.outputs.digest }}
+          image: ${{ env.GHCR_NS }}/php@${{ steps.digest.outputs.digest }}
           format: spdx-json
           output-file: sbom.spdx.json
 
@@ -128,12 +128,12 @@ jobs:
 
       # Sign both registries (keyless via OIDC)
       - name: Cosign sign (GHCR)
-        run: cosign sign "${{ env.GHCR_NS }}/php-src@${{ steps.digest.outputs.digest }}"
+        run: cosign sign "${{ env.GHCR_NS }}/php@${{ steps.digest.outputs.digest }}"
       - name: Cosign sign (Docker Hub)
-        run: cosign sign "docker.io/${{ env.DOCKERHUB_NS }}/php-src@${{ steps.digest.outputs.digest }}"
+        run: cosign sign "docker.io/${{ env.DOCKERHUB_NS }}/php@${{ steps.digest.outputs.digest }}"
 
       # Attest SBOM to both registries
       - name: Cosign attest SBOM (GHCR)
-        run: cosign attest --predicate sbom.spdx.json --type spdx "${{ env.GHCR_NS }}/php-src@${{ steps.digest.outputs.digest }}"
+        run: cosign attest --predicate sbom.spdx.json --type spdx "${{ env.GHCR_NS }}/php@${{ steps.digest.outputs.digest }}"
       - name: Cosign attest SBOM (Docker Hub)
         run: cosign attest --predicate sbom.spdx.json --type spdx "docker.io/${{ env.DOCKERHUB_NS }}/php-src@${{ steps.digest.outputs.digest }}"
