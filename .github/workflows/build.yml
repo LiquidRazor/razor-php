@@ -105,7 +105,6 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.php_line }}-${{ matrix.target }}
           # ---- TAGS: rolling + immutable (patch-pinned) ----
           tags: |
-            # GHCR rolling
             ${{ env.GHCR_NS }}/php:${{ matrix.tags }}
             docker.io/${{ env.DOCKERHUB_NS }}/php:${{ matrix.tags }}
             ${{ env.GHCR_NS }}/php:${{ env[matrix.php_version_env] }}-${{ matrix.target }}
