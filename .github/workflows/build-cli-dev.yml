@@ -72,7 +72,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             PHP_VERSION=${{ env[matrix.php_version_env] }}
-            CCACHE_PHP_MAJOR=php-${{ matrix.php_line }}
             BASE_IMAGE=${{ env.GHCR_NS }}/php:${{ env[matrix.php_version_env] }}-${{ matrix.base_target }}
           # Separate caches per PHP line and target
           cache-from: type=gha,scope=${{ matrix.php_line }}-${{ matrix.target }}

@@ -45,7 +45,6 @@ RUN apt-get update \
     make \
     pkgconf \
     re2c \
-    ccache \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/local/src
@@ -53,7 +52,7 @@ RUN curl -fsSL "https://www.php.net/distributions/php-${PHP_VERSION}.tar.xz" -o 
  && tar -xf php.tar.xz && mv php-${PHP_VERSION} php && rm php.tar.xz
 
 WORKDIR /usr/local/src/php
-RUN --mount=type=cache,target=/ccache/$CCACHE_PHP_MAJOR/fpm ./configure \
+RUN ./configure \
   --prefix=/opt/php \
   --with-config-file-path=/etc/php \
   --with-config-file-scan-dir=/etc/php/conf.d \

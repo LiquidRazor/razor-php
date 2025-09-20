@@ -45,18 +45,14 @@ RUN apt-get update \
     make \
     pkgconf \
     re2c \
-    ccache \
   && rm -rf /var/lib/apt/lists/*
-
-ENV PATH="/usr/lib/ccache:${PATH}" CCACHE_COMPRESS=1 CCACHE_MAXSIZE=2G
 
 WORKDIR /usr/local/src
 RUN curl -fsSL "https://www.php.net/distributions/php-${PHP_VERSION}.tar.xz" -o php.tar.xz \
  && tar -xf php.tar.xz && mv php-${PHP_VERSION} php && rm php.tar.xz
 
 WORKDIR /usr/local/src/php
-ENV CCACHE_DIR=/ccache/$CCACHE_PHP_MAJOR/cli
-RUN --mount=type=cache,target=/ccache/$CCACHE_PHP_MAJOR/cli ./configure \
+RUN  ./configure \
   --prefix=/opt/php \
   --with-config-file-path=/etc/php \
   --with-config-file-scan-dir=/etc/php/conf.d \
