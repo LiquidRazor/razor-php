@@ -1,11 +1,11 @@
-name: Build, Sign & Publish (Hub + GHCR) — PHP 8.4 & 8.3
+name: PHP-CLI
 
 on:
   push:
     branches: [ main ]
     paths:
-      - 'docker/php/**'
-      - '.github/workflows/build.yml'
+      - 'docker/php/cli/base/**'
+      - 'build-cli.yml'
   schedule:
     - cron: '0 2 * * 1'   # weekly rebuild
   workflow_dispatch:
@@ -18,12 +18,10 @@ permissions:
 env:
   DOCKERHUB_NS: liquidrazor
   GHCR_NS: ghcr.io/liquidrazor
-  COSIGN_EXPERIMENTAL: "true"
-  COSIGN_YES: "true"
 
   # Patch versions (immutable tag source)
-  PHP_84: 8.4.11
-  PHP_83: 8.3.13
+  PHP_84: ${{ vars.PHP_84_VERSION }}
+  PHP_83: ${{ vars.PHP_83_VERSION }}
 
 jobs:
   build:
@@ -35,38 +33,13 @@ jobs:
           # -------- PHP 8.4 --------
           - php_line: 8.4
             php_version_env: PHP_84
-            target: fpm
-            tags: 8.4-fpm,fpm
-          - php_line: 8.4
-            php_version_env: PHP_84
             target: cli
             tags: 8.4-cli,cli
-          - php_line: 8.4
-            php_version_env: PHP_84
-            target: fpm-dev
-            tags: 8.4-fpm-dev,fpm-dev
-          - php_line: 8.4
-            php_version_env: PHP_84
-            target: cli-dev
-            tags: 8.4-cli-dev,cli-dev
-
           # -------- PHP 8.3 --------
-          - php_line: 8.3
-            php_version_env: PHP_83
-            target: fpm
-            tags: 8.3-fpm
           - php_line: 8.3
             php_version_env: PHP_83
             target: cli
             tags: 8.3-cli
-          - php_line: 8.3
-            php_version_env: PHP_83
-            target: fpm-dev
-            tags: 8.3-fpm-dev
-          - php_line: 8.3
-            php_version_env: PHP_83
-            target: cli-dev
-            tags: 8.3-cli-dev
 
     steps:
       - uses: actions/checkout@v4
@@ -92,15 +65,15 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: docker/php
-          file: docker/php/Dockerfile
+          context: docker/php/cli/base
+          file: docker/php/cli/base/Dockerfile
           target: ${{ matrix.target }}
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: |
             PHP_VERSION=${{ env[matrix.php_version_env] }}
             CCACHE_PHP_MAJOR=php-${{ matrix.php_line }}
-          # Separate caches per PHP line & target
+          # Separate caches per PHP line and target
           cache-from: type=gha,scope=${{ matrix.php_line }}-${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=${{ matrix.php_line }}-${{ matrix.target }}
           # ---- TAGS: rolling + immutable (patch-pinned) ----
@@ -109,31 +82,3 @@ jobs:
             docker.io/${{ env.DOCKERHUB_NS }}/php:${{ matrix.tags }}
             ${{ env.GHCR_NS }}/php:${{ env[matrix.php_version_env] }}-${{ matrix.target }}
             docker.io/${{ env.DOCKERHUB_NS }}/php:${{ env[matrix.php_version_env] }}-${{ matrix.target }}
-
-      - name: Capture image digest
-        id: digest
-        run: echo "digest=${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
-
-      # SBOM (SPDX)
-      - name: Generate SBOM (SPDX)
-        uses: anchore/sbom-action@v0
-        with:
-          image: ${{ env.GHCR_NS }}/php-src@${{ steps.digest.outputs.digest }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-
-      # Cosign install
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-
-      # Sign both registries (keyless via OIDC)
-      - name: Cosign sign (GHCR)
-        run: cosign sign "${{ env.GHCR_NS }}/php-src@${{ steps.digest.outputs.digest }}"
-      - name: Cosign sign (Docker Hub)
-        run: cosign sign "docker.io/${{ env.DOCKERHUB_NS }}/php-src@${{ steps.digest.outputs.digest }}"
-
-      # Attest SBOM to both registries
-      - name: Cosign attest SBOM (GHCR)
-        run: cosign attest --predicate sbom.spdx.json --type spdx "${{ env.GHCR_NS }}/php-src@${{ steps.digest.outputs.digest }}"
-      - name: Cosign attest SBOM (Docker Hub)
-        run: cosign attest --predicate sbom.spdx.json --type spdx "docker.io/${{ env.DOCKERHUB_NS }}/php-src@${{ steps.digest.outputs.digest }}"
