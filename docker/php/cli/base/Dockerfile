@@ -147,7 +147,7 @@ RUN set -eux; \
     echo "extension = redis.so"    > /mods/conf.d/15-redis.ini
 
 
- ===== runtime base =====
+# ===== runtime base =====
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
   libcurl4 \
