@@ -33,12 +33,10 @@ jobs:
           # -------- PHP 8.4 --------
           - php_line: 8.4
             php_version_env: PHP_84
-            target: cli
             tags: 8.4-cli,cli
           # -------- PHP 8.3 --------
           - php_line: 8.3
             php_version_env: PHP_83
-            target: cli
             tags: 8.3-cli
 
     steps:

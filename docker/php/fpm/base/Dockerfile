@@ -176,7 +176,7 @@ RUN mkdir -p /etc/php/conf.d
 ENV PATH="/opt/php/bin:/opt/php/sbin:${PATH}"
 ENV PHP_INI_DIR=/etc/php
 
-FROM build-base as strip
+FROM build-base AS strip
 
 RUN set -eux; \
   find /opt/php -type f -name '*.a'  -delete; \
