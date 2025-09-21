@@ -4,78 +4,194 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'docker/php/fpm/base/**'
-      - 'build-fpm.yml'
+      - 'docker/php/fpm/**'
+      - '.github/workflows/build-fpm.yml'
   schedule:
     - cron: '0 2 * * 1'   # weekly rebuild
   workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: write         # push to GHCR
-  id-token: write         # cosign keyless
-
 env:
-  DOCKERHUB_NS: liquidrazor
-  GHCR_NS: ghcr.io/liquidrazor
+  IMAGE: ghcr.io/liquidrazor/php
 
-  # Patch versions (immutable tag source)
-  PHP_84: ${{ vars.PHP_84_VERSION }}
-  PHP_83: ${{ vars.PHP_83_VERSION }}
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
+  # =========================
+  # Build (FPM) per-arch
+  # =========================
+  build-amd64:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # -------- PHP 8.4 --------
-          - php_line: 8.4
-            php_version_env: PHP_84
-            tags: 8.4-fpm,fpm
-          # -------- PHP 8.3 --------
-          - php_line: 8.3
-            php_version_env: PHP_83
-            tags: 8.3-fpm
-
+        version:
+          - { key: 'PHP-LATEST',   is_latest: true  }
+          - { key: 'PHP-PREVIOUS', is_latest: false }
+    env:
+      ARCH_SUFFIX: amd64
+      PHP_VERSION: ${{ vars[matrix.version.key] }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
 
-      # Login to GHCR
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Login to Docker Hub
-      - uses: docker/login-action@v3
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Compute tags (FPM)
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          PHP_VERSION="${PHP_VERSION:?missing}"
+          LINE_VERSION="$(cut -d. -f1,2 <<<"$PHP_VERSION")"
+          IS_LATEST="${{ matrix.version.is_latest }}"
 
-      - name: Build & Push ${{ matrix.php_line }} ${{ matrix.target }}
-        id: build
-        uses: docker/build-push-action@v6
+          TAGS=("php-${LINE_VERSION}-fpm" "php-${PHP_VERSION}-fpm")
+          if [[ "$IS_LATEST" == "true" ]]; then
+            TAGS=("php-fpm" "${TAGS[@]}")
+          fi
+
+          ARCH="${ARCH_SUFFIX}"
+          mapfile -t TAGS_WITH_ARCH < <(for t in "${TAGS[@]}"; do printf "%s:%s-%s\n" "${IMAGE}" "$t" "${ARCH}"; done)
+
+          printf "tags_no_arch<<'EOF'\n%s\nEOF\n" "$(printf "%s\n" "${TAGS[@]}")" >> "$GITHUB_OUTPUT"
+          printf "tags_with_arch<<'EOF'\n%s\nEOF\n" "$(printf "%s\n" "${TAGS_WITH_ARCH[@]}")" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
         with:
           context: docker/php/fpm/base
           file: docker/php/fpm/base/Dockerfile
-          target: ${{ matrix.target }}
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           build-args: |
-            PHP_VERSION=${{ env[matrix.php_version_env] }}
-          # Separate caches per PHP line and target
-          cache-from: type=gha,scope=${{ matrix.php_line }}-${{ matrix.target }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.php_line }}-${{ matrix.target }}
-          # ---- TAGS: rolling + immutable (patch-pinned) ----
-          tags: |
-            ${{ env.GHCR_NS }}/php:${{ matrix.tags }}
-            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ matrix.tags }}
-            ${{ env.GHCR_NS }}/php:${{ env[matrix.php_version_env] }}-${{ matrix.target }}
-            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ env[matrix.php_version_env] }}-${{ matrix.target }}
+            PHP_VERSION=${{ env.PHP_VERSION }}
+          tags: ${{ steps.tags.outputs.tags_with_arch }}
+          cache-from: |
+            type=registry,ref=${{ env.IMAGE }}:buildcache-fpm-${{ env.PHP_VERSION }}-amd64
+            type=gha,scope=fpm-${{ env.PHP_VERSION }}-amd64
+          cache-to: |
+            type=registry,ref=${{ env.IMAGE }}:buildcache-fpm-${{ env.PHP_VERSION }}-amd64,mode=max
+            type=gha,scope=fpm-${{ env.PHP_VERSION }}-amd64,mode=max
+          sbom: false
+          provenance: false
+
+  build-arm64:
+    runs-on: ubuntu-24.04-arm64   # or your self-hosted ARM64 runner label
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - { key: 'PHP-LATEST',   is_latest: true  }
+          - { key: 'PHP-PREVIOUS', is_latest: false }
+    env:
+      ARCH_SUFFIX: arm64
+      PHP_VERSION: ${{ vars[matrix.version.key] }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags (FPM)
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          PHP_VERSION="${PHP_VERSION:?missing}"
+          LINE_VERSION="$(cut -d. -f1,2 <<<"$PHP_VERSION")"
+          IS_LATEST="${{ matrix.version.is_latest }}"
+
+          TAGS=("php-${LINE_VERSION}-fpm" "php-${PHP_VERSION}-fpm")
+          if [[ "$IS_LATEST" == "true" ]]; then
+            TAGS=("php-fpm" "${TAGS[@]}")
+          fi
+
+          ARCH="${ARCH_SUFFIX}"
+          mapfile -t TAGS_WITH_ARCH < <(for t in "${TAGS[@]}"; do printf "%s:%s-%s\n" "${IMAGE}" "$t" "${ARCH}"; done)
+
+          printf "tags_no_arch<<'EOF'\n%s\nEOF\n" "$(printf "%s\n" "${TAGS[@]}")" >> "$GITHUB_OUTPUT"
+          printf "tags_with_arch<<'EOF'\n%s\nEOF\n" "$(printf "%s\n" "${TAGS_WITH_ARCH[@]}")" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: docker/php/fpm/base
+          file: docker/php/fpm/base/Dockerfile
+          push: true
+          platforms: linux/arm64
+          build-args: |
+            PHP_VERSION=${{ env.PHP_VERSION }}
+          tags: ${{ steps.tags.outputs.tags_with_arch }}
+          cache-from: |
+            type=registry,ref=${{ env.IMAGE }}:buildcache-fpm-${{ env.PHP_VERSION }}-arm64
+            type=gha,scope=fpm-${{ env.PHP_VERSION }}-arm64
+          cache-to: |
+            type=registry,ref=${{ env.IMAGE }}:buildcache-fpm-${{ env.PHP_VERSION }}-arm64,mode=max
+            type=gha,scope=fpm-${{ env.PHP_VERSION }}-arm64,mode=max
+          sbom: false
+          provenance: false
+
+  # =========================
+  # Multi-arch manifests
+  # =========================
+  manifest:
+    runs-on: ubuntu-latest
+    needs: [build-amd64, build-arm64]
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - { key: 'PHP-LATEST',   is_latest: true  }
+          - { key: 'PHP-PREVIOUS', is_latest: false }
+    env:
+      PHP_VERSION: ${{ vars[matrix.version.key] }}
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Recompute final tags (FPM)
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          PHP_VERSION="${PHP_VERSION:?missing}"
+          LINE_VERSION="$(cut -d. -f1,2 <<<"$PHP_VERSION")"
+          IS_LATEST="${{ matrix.version.is_latest }}"
+
+          TAGS=("php-${LINE_VERSION}-fpm" "php-${PHP_VERSION}-fpm")
+          if [[ "$IS_LATEST" == "true" ]]; then
+            TAGS=("php-fpm" "${TAGS[@]}")
+          fi
+
+          printf "tags_no_arch<<'EOF'\n%s\nEOF\n" "$(printf "%s\n" "${TAGS[@]}")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish multi-arch manifests (FPM)
+        shell: bash
+        env:
+          IMAGE: ${{ env.IMAGE }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r TAG; do
+            echo "Creating manifest for ${IMAGE}:${TAG}"
+            docker buildx imagetools create \
+              -t "${IMAGE}:${TAG}" \
+              "${IMAGE}:${TAG}-amd64" \
+              "${IMAGE}:${TAG}-arm64"
+          done <<< "${{ steps.tags.outputs.tags_no_arch }}"

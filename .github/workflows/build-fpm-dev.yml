@@ -1,11 +1,11 @@
-name: PHP-FPM DEV
+name: PHP-FPM-DEV
 
 on:
   workflow_run:
     workflows: [ "PHP-FPM" ]
     types: [ completed ]
-    # Optional: allow manual runs
-    workflow_dispatch:
+  # Optional: allow manual runs
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,11 +14,11 @@ permissions:
 
 env:
   DOCKERHUB_NS: liquidrazor
-  GHCR_NS: ghcr.io/liquidrazor"
+  GHCR_NS: ghcr.io/liquidrazor
 
   # Patch versions (immutable tag source)
-  PHP_84: ${{ vars.PHP_84_VERSION }}
-  PHP_83: ${{ vars.PHP_83_VERSION }}
+  PHP_LATEST: ${{ vars.PHP_LATEST }}
+  PHP_PREVIOUS: ${{ vars.PHP_PREVIOUS }}
 
 jobs:
   build:
@@ -28,16 +28,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # -------- PHP 8.4 --------
-          - php_line: 8.4
-            php_version_env: PHP_84
+          # -------- PHP LATEST --------
+          - php_version_env: PHP_LATEST
             base_target: fpm
-            tags: 8.4-fpm-dev,fpm-dev
-          # -------- PHP 8.3 --------
-          - php_line: 8.3
-            php_version_env: PHP_83
+            # keep your intent: latest also gets the rolling "fpm-dev" tag
+            want_latest_rollup: true
+          # -------- PHP PREVIOUS --------
+          - php_version_env: PHP_PREVIOUS
             base_target: fpm
-            tags: 8.3-fpm-dev
+            want_latest_rollup: false
 
     steps:
       - uses: actions/checkout@v4
@@ -59,24 +58,42 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & Push ${{ matrix.php_line }} ${{ matrix.target }}
+      # Derive LINE (major.minor) and PATCH from the env-sourced patch version
+      - name: Compute version strings
+        id: vers
+        shell: bash
+        run: |
+          PATCH="${{ env[matrix.php_version_env] }}"
+          LINE="${PATCH%.*}"
+          echo "patch=${PATCH}" >> "$GITHUB_OUTPUT"
+          echo "line=${LINE}" >> "$GITHUB_OUTPUT"
+          # Extra rolling tag only for LATEST
+          if [ "${{ matrix.want_latest_rollup }}" = "true" ]; then
+            printf "tags_extra=%s\n%s\n" \
+              "${{ env.GHCR_NS }}/php:fpm-dev" \
+              "docker.io/${{ env.DOCKERHUB_NS }}/php:fpm-dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags_extra=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build & Push ${{ steps.vers.outputs.line }} ${{ matrix.base_target }}
         id: build
         uses: docker/build-push-action@v6
         with:
           context: docker/php/fpm/development
           file: docker/php/fpm/development/Dockerfile
-          target: ${{ matrix.target }}
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: |
-            PHP_VERSION=${{ env[matrix.php_version_env] }}
-            BASE_IMAGE=${{ env.GHCR_NS }}/php:${{ env[matrix.php_version_env] }}-${{ matrix.base_target }}
-          # Separate caches per PHP line and target
-          cache-from: type=gha,scope=${{ matrix.php_line }}-${{ matrix.target }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.php_line }}-${{ matrix.target }}
+            PHP_VERSION=${{ steps.vers.outputs.patch }}
+            BASE_IMAGE=${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
+          # Separate caches per LINE and target
+          cache-from: type=gha,scope=${{ steps.vers.outputs.line }}-${{ matrix.base_target }}
+          cache-to: type=gha,mode=max,scope=${{ steps.vers.outputs.line }}-${{ matrix.base_target }}
           # ---- TAGS: rolling + immutable (patch-pinned) ----
           tags: |
-            ${{ env.GHCR_NS }}/php:${{ matrix.tags }}
-            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ matrix.tags }}
-            ${{ env.GHCR_NS }}/php:${{ env[matrix.php_version_env] }}-${{ matrix.target }}
-            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ env[matrix.php_version_env] }}-${{ matrix.target }}
+            ${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.line }}-fpm-dev
+            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ steps.vers.outputs.line }}-fpm-dev
+            ${{ steps.vers.outputs.tags_extra }}
+            ${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
+            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
