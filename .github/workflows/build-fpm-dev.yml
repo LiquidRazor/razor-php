@@ -22,7 +22,7 @@ env:
 
 jobs:
   build:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
       fail-fast: false
