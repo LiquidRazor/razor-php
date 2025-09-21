@@ -55,8 +55,16 @@ jobs:
           fi
           ARCH="${ARCH_SUFFIX}"
           mapfile -t TAGS_WITH_ARCH < <(for t in "${TAGS[@]}"; do printf "%s:%s-%s\n" "${IMAGE}" "$t" "${ARCH}"; done)
-          printf "tags_no_arch<<'EOF'\n%s\nEOF\n" "$(printf "%s\n" "${TAGS[@]}")" >> "$GITHUB_OUTPUT"
-          printf "tags_with_arch<<'EOF'\n%s\nEOF\n" "$(printf "%s\n" "${TAGS_WITH_ARCH[@]}")" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags_no_arch<<__NOARCH__"
+            printf '%s\n' "${TAGS[@]}"
+            echo "__NOARCH__"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "tags_with_arch<<__ARCH__"
+            printf '%s\n' "${TAGS_WITH_ARCH[@]}"
+            echo "__ARCH__"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
         with:
@@ -113,8 +121,16 @@ jobs:
           fi
           ARCH="${ARCH_SUFFIX}"
           mapfile -t TAGS_WITH_ARCH < <(for t in "${TAGS[@]}"; do printf "%s:%s-%s\n" "${IMAGE}" "$t" "${ARCH}"; done)
-          printf "tags_no_arch<<'EOF'\n%s\nEOF\n" "$(printf "%s\n" "${TAGS[@]}")" >> "$GITHUB_OUTPUT"
-          printf "tags_with_arch<<'EOF'\n%s\nEOF\n" "$(printf "%s\n" "${TAGS_WITH_ARCH[@]}")" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags_no_arch<<__NOARCH__"
+            printf '%s\n' "${TAGS[@]}"
+            echo "__NOARCH__"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "tags_with_arch<<__ARCH__"
+            printf '%s\n' "${TAGS_WITH_ARCH[@]}"
+            echo "__ARCH__"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
         with:
