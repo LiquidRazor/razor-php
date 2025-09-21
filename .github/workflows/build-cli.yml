@@ -10,8 +10,13 @@ on:
     - cron: '0 2 * * 1'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write   # needed for GHCR
+
 env:
-  IMAGE: ghcr.io/liquidrazor/php
+  GHCR_IMAGE: ghcr.io/liquidrazor/php
+  DOCKERHUB_IMAGE: docker.io/liquidrazor/php
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,17 +35,25 @@ jobs:
             is_latest: false
     env:
       ARCH_SUFFIX: amd64
-      PHP_VERSION: ${{ vars[matrix.var] }}     # <-- fix
-      IS_LATEST: ${{ matrix.is_latest }}       # <-- new
+      PHP_VERSION: ${{ vars[matrix.var] }}
+      IS_LATEST: ${{ matrix.is_latest }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
         with: { driver: docker-container }
+
+      # Log in to GHCR
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Log in to Docker Hub
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Compute tags (CLI)
         id: tags
@@ -49,21 +62,40 @@ jobs:
           set -euo pipefail
           PHP_VERSION="${PHP_VERSION:?missing}"
           LINE_VERSION="$(cut -d. -f1,2 <<<"$PHP_VERSION")"
+
           TAGS=("php-${LINE_VERSION}-cli" "php-${PHP_VERSION}-cli")
           if [[ "${IS_LATEST}" == "true" ]]; then
             TAGS=("php-cli" "${TAGS[@]}")
           fi
+
           ARCH="${ARCH_SUFFIX}"
-          mapfile -t TAGS_WITH_ARCH < <(for t in "${TAGS[@]}"; do printf "%s:%s-%s\n" "${IMAGE}" "$t" "${ARCH}"; done)
-          {
-            echo "tags_no_arch<<__NOARCH__"
-            printf '%s\n' "${TAGS[@]}"
-            echo "__NOARCH__"
-          } >> "$GITHUB_OUTPUT"
+
+          # Registry-qualified tags with arch suffix
+          mapfile -t TAGS_WITH_ARCH < <(
+            for t in "${TAGS[@]}"; do
+              printf "%s:%s-%s\n" "${GHCR_IMAGE}" "$t" "${ARCH}"
+              printf "%s:%s-%s\n" "${DOCKERHUB_IMAGE}" "$t" "${ARCH}"
+            done
+          )
+
+          # No-arch tags (for manifest creation)
+          mapfile -t TAGS_NO_ARCH < <(
+            for t in "${TAGS[@]}"; do
+              printf "%s:%s\n" "${GHCR_IMAGE}" "$t"
+              printf "%s:%s\n" "${DOCKERHUB_IMAGE}" "$t"
+            done
+          )
+
           {
             echo "tags_with_arch<<__ARCH__"
             printf '%s\n' "${TAGS_WITH_ARCH[@]}"
             echo "__ARCH__"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "tags_no_arch<<__NOARCH__"
+            printf '%s\n' "${TAGS_NO_ARCH[@]}"
+            echo "__NOARCH__"
           } >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
@@ -76,10 +108,10 @@ jobs:
             PHP_VERSION=${{ env.PHP_VERSION }}
           tags: ${{ steps.tags.outputs.tags_with_arch }}
           cache-from: |
-            type=registry,ref=${{ env.IMAGE }}:buildcache-cli-${{ env.PHP_VERSION }}-amd64
+            type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-cli-${{ env.PHP_VERSION }}-amd64
             type=gha,scope=cli-${{ env.PHP_VERSION }}-amd64
           cache-to: |
-            type=registry,ref=${{ env.IMAGE }}:buildcache-cli-${{ env.PHP_VERSION }}-amd64,mode=max
+            type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-cli-${{ env.PHP_VERSION }}-amd64,mode=max
             type=gha,scope=cli-${{ env.PHP_VERSION }}-amd64,mode=max
           sbom: false
           provenance: false
@@ -96,17 +128,23 @@ jobs:
             is_latest: false
     env:
       ARCH_SUFFIX: arm64
-      PHP_VERSION: ${{ vars[matrix.var] }}     # <-- fix
-      IS_LATEST: ${{ matrix.is_latest }}       # <-- new
+      PHP_VERSION: ${{ vars[matrix.var] }}
+      IS_LATEST: ${{ matrix.is_latest }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
         with: { driver: docker-container }
+
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Compute tags (CLI)
         id: tags
@@ -115,24 +153,38 @@ jobs:
           set -euo pipefail
           PHP_VERSION="${PHP_VERSION:?missing}"
           LINE_VERSION="$(cut -d. -f1,2 <<<"$PHP_VERSION")"
+
           TAGS=("php-${LINE_VERSION}-cli" "php-${PHP_VERSION}-cli")
           if [[ "${IS_LATEST}" == "true" ]]; then
             TAGS=("php-cli" "${TAGS[@]}")
           fi
+
           ARCH="${ARCH_SUFFIX}"
-          mapfile -t TAGS_WITH_ARCH < <(for t in "${TAGS[@]}"; do printf "%s:%s-%s\n" "${IMAGE}" "$t" "${ARCH}"; done)
-          # write simple (no-arch) tags
-          {
-            echo "tags_no_arch<<__NOARCH__"
-            printf '%s\n' "${TAGS[@]}"
-          echo "__NOARCH__"
-          } >> "$GITHUB_OUTPUT"
-          
-          # write arch-suffixed tags
+
+          mapfile -t TAGS_WITH_ARCH < <(
+            for t in "${TAGS[@]}"; do
+              printf "%s:%s-%s\n" "${GHCR_IMAGE}" "$t" "${ARCH}"
+              printf "%s:%s-%s\n" "${DOCKERHUB_IMAGE}" "$t" "${ARCH}"
+            done
+          )
+
+          mapfile -t TAGS_NO_ARCH < <(
+            for t in "${TAGS[@]}"; do
+              printf "%s:%s\n" "${GHCR_IMAGE}" "$t"
+              printf "%s:%s\n" "${DOCKERHUB_IMAGE}" "$t"
+            done
+          )
+
           {
             echo "tags_with_arch<<__ARCH__"
             printf '%s\n' "${TAGS_WITH_ARCH[@]}"
-          echo "__ARCH__"
+            echo "__ARCH__"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "tags_no_arch<<__NOARCH__"
+            printf '%s\n' "${TAGS_NO_ARCH[@]}"
+            echo "__NOARCH__"
           } >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
@@ -145,17 +197,17 @@ jobs:
             PHP_VERSION=${{ env.PHP_VERSION }}
           tags: ${{ steps.tags.outputs.tags_with_arch }}
           cache-from: |
-            type=registry,ref=${{ env.IMAGE }}:buildcache-cli-${{ env.PHP_VERSION }}-arm64
+            type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-cli-${{ env.PHP_VERSION }}-arm64
             type=gha,scope=cli-${{ env.PHP_VERSION }}-arm64
           cache-to: |
-            type=registry,ref=${{ env.IMAGE }}:buildcache-cli-${{ env.PHP_VERSION }}-arm64,mode=max
+            type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-cli-${{ env.PHP_VERSION }}-arm64,mode=max
             type=gha,scope=cli-${{ env.PHP_VERSION }}-arm64,mode=max
           sbom: false
           provenance: false
 
   manifest:
     runs-on: ubuntu-latest
-    needs: [ build-amd64, build-arm64 ]
+    needs: [build-amd64, build-arm64]
     strategy:
       fail-fast: false
       matrix:
@@ -165,15 +217,19 @@ jobs:
           - var: PHP_PREVIOUS
             is_latest: false
     env:
-      PHP_VERSION: ${{ vars[matrix.var] }}     # <-- fix
-      IS_LATEST: ${{ matrix.is_latest }}       # <-- new
+      PHP_VERSION: ${{ vars[matrix.var] }}
+      IS_LATEST: ${{ matrix.is_latest }}
     steps:
-      - uses: docker/setup-buildx-action@v3    # ensure imagetools is available
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Recompute final tags (CLI)
         id: tags
@@ -182,22 +238,36 @@ jobs:
           set -euo pipefail
           PHP_VERSION="${PHP_VERSION:?missing}"
           LINE_VERSION="$(cut -d. -f1,2 <<<"$PHP_VERSION")"
+
           TAGS=("php-${LINE_VERSION}-cli" "php-${PHP_VERSION}-cli")
           if [[ "${IS_LATEST}" == "true" ]]; then
             TAGS=("php-cli" "${TAGS[@]}")
           fi
-          printf "tags_no_arch<<'EOF'\n%s\nEOF\n" "$(printf "%s\n" "${TAGS[@]}")" >> "$GITHUB_OUTPUT"
+
+          # Fully-qualified (no-arch) targets for manifest creation, both registries
+          mapfile -t TAGS_NO_ARCH < <(
+            for t in "${TAGS[@]}"; do
+              printf "%s:%s\n" "${GHCR_IMAGE}" "$t"
+              printf "%s:%s\n" "${DOCKERHUB_IMAGE}" "$t"
+            done
+          )
+
+          {
+            echo "tags_no_arch<<__NOARCH__"
+            printf '%s\n' "${TAGS_NO_ARCH[@]}"
+            echo "__NOARCH__"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Publish multi-arch manifests (CLI)
         shell: bash
-        env:
-          IMAGE: ${{ env.IMAGE }}
         run: |
           set -euo pipefail
-          while IFS= read -r TAG; do
-            echo "Creating manifest for ${IMAGE}:${TAG}"
+          while IFS= read -r TARGET; do
+            base="${TARGET%:*}"
+            tag="${TARGET##*:}"
+            echo "Creating manifest for ${base}:${tag}"
             docker buildx imagetools create \
-              -t "${IMAGE}:${TAG}" \
-              "${IMAGE}:${TAG}-amd64" \
-              "${IMAGE}:${TAG}-arm64"
+              -t "${base}:${tag}" \
+              "${base}:${tag}-amd64" \
+              "${base}:${tag}-arm64"
           done <<< "${{ steps.tags.outputs.tags_no_arch }}"
