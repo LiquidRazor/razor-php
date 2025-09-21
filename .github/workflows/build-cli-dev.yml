@@ -70,9 +70,12 @@ jobs:
           echo "line=${LINE}" >> "$GITHUB_OUTPUT"
           # Extra rolling tag only for LATEST
           if [ "${{ matrix.want_latest_rollup }}" = "true" ]; then
-            printf "tags_extra=%s\n%s\n" \
-              "${{ env.GHCR_NS }}/php:cli-dev" \
-              "docker.io/${{ env.DOCKERHUB_NS }}/php:cli-dev" >> "$GITHUB_OUTPUT"
+            {
+              echo "tags_extra<<__EXTRA__"
+              echo "${{env.GHCR_NS}}/php:cli-dev"
+              echo "docker.io/${{env.DOCKERHUB_NS}}/php:cli-dev"   # docker.io is optional but explicit
+              echo "__EXTRA__"
+            } >> "$GITHUB_OUTPUT"
           else
             echo "tags_extra=" >> "$GITHUB_OUTPUT"
           fi
