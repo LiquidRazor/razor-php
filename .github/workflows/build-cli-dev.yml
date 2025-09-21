@@ -86,7 +86,6 @@ jobs:
         with:
           context: docker/php/cli/development
           file: docker/php/cli/development/Dockerfile
-          target: ${{ matrix.base_target }}
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: |
