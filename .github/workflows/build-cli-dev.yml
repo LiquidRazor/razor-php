@@ -72,8 +72,8 @@ jobs:
           if [ "${{ matrix.want_latest_rollup }}" = "true" ]; then
             {
               echo "tags_extra<<__EXTRA__"
-              echo "${{env.GHCR_NS}}/php:php-cli-dev"
-              echo "docker.io/${{env.DOCKERHUB_NS}}/php:php-cli-dev"   # docker.io is optional but explicit
+              echo "${{env.GHCR_NS}}/php:cli-dev"
+              echo "docker.io/${{env.DOCKERHUB_NS}}/php:cli-dev"   # docker.io is optional but explicit
               echo "__EXTRA__"
             } >> "$GITHUB_OUTPUT"
           else
@@ -90,12 +90,12 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             PHP_VERSION=${{ steps.vers.outputs.patch }}
-            BASE_IMAGE=${{ env.GHCR_NS }}/php:php-${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
+            BASE_IMAGE=${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
           # Separate caches per LINE and target
           # ---- TAGS: rolling + immutable (patch-pinned) ----
           tags: |
-            ${{ env.GHCR_NS }}/php:php-${{ steps.vers.outputs.line }}-cli-dev
-            docker.io/${{ env.DOCKERHUB_NS }}/php:php-${{ steps.vers.outputs.line }}-cli-dev
+            ${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.line }}-cli-dev
+            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ steps.vers.outputs.line }}-cli-dev
             ${{ steps.vers.outputs.tags_extra }}
-            ${{ env.GHCR_NS }}/php:php-${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
-            docker.io/${{ env.DOCKERHUB_NS }}/php:php-${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
+            ${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
+            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}

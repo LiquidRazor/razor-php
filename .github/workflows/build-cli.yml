@@ -63,9 +63,9 @@ jobs:
           PHP_VERSION="${PHP_VERSION:?missing}"
           LINE_VERSION="$(cut -d. -f1,2 <<<"$PHP_VERSION")"
 
-          TAGS=("php-${LINE_VERSION}-cli" "php-${PHP_VERSION}-cli")
+          TAGS=("${LINE_VERSION}-cli" "${PHP_VERSION}-cli")
           if [[ "${IS_LATEST}" == "true" ]]; then
-            TAGS=("php-cli" "${TAGS[@]}")
+            TAGS=("cli" "${TAGS[@]}")
           fi
 
           ARCH="${ARCH_SUFFIX}"
@@ -148,9 +148,9 @@ jobs:
           PHP_VERSION="${PHP_VERSION:?missing}"
           LINE_VERSION="$(cut -d. -f1,2 <<<"$PHP_VERSION")"
 
-          TAGS=("php-${LINE_VERSION}-cli" "php-${PHP_VERSION}-cli")
+          TAGS=("${LINE_VERSION}-cli" "${PHP_VERSION}-cli")
           if [[ "${IS_LATEST}" == "true" ]]; then
-            TAGS=("php-cli" "${TAGS[@]}")
+            TAGS=("cli" "${TAGS[@]}")
           fi
 
           ARCH="${ARCH_SUFFIX}"
@@ -228,9 +228,9 @@ jobs:
           PHP_VERSION="${PHP_VERSION:?missing}"
           LINE_VERSION="$(cut -d. -f1,2 <<<"$PHP_VERSION")"
 
-          TAGS=("php-${LINE_VERSION}-cli" "php-${PHP_VERSION}-cli")
+          TAGS=("${LINE_VERSION}-cli" "${PHP_VERSION}-cli")
           if [[ "${IS_LATEST}" == "true" ]]; then
-            TAGS=("php-cli" "${TAGS[@]}")
+            TAGS=("cli" "${TAGS[@]}")
           fi
 
           # Fully-qualified (no-arch) targets for manifest creation, both registries
