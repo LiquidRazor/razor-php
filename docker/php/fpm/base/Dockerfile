@@ -102,7 +102,7 @@ RUN ./configure \
 
 # Package outputs for runtime
 RUN mkdir -p /out/conf.d /out/etc/php-fpm.d
-RUN printf "[global]\nerror_log=/proc/self/fd/2\ndaemonize=no\n" > /out/php-fpm.conf
+RUN printf "[global]\nerror_log=/proc/self/fd/2\ndaemonize=no\ninclude=/etc/php/pools/*.conf\n" > /out/php-fpm.conf
 RUN printf "[www]\nuser=app\ngroup=app\nlisten=0.0.0.0:9000\npm=ondemand\npm.max_children=10\npm.process_idle_timeout=10s\npm.status_path=/status\nping.path=/ping\nclear_env=no\ncatch_workers_output=yes\n" > /out/etc/php-fpm.d/www.conf
 
 FROM build-base AS build-modules
@@ -193,8 +193,8 @@ ARG PHP_VERSION
 
 # PHP from base
 COPY --from=strip /opt/php /opt/php
-COPY --from=build-base /out/php-fpm.conf /etc/php-fpm.conf
-COPY --from=build-base /out/etc/php-fpm.d /etc/php-fpm.d
+COPY --from=build-base /out/php-fpm.conf /etc/php/php-fpm.conf
+COPY --from=build-base /out/etc/php-fpm.d/www.conf /etc/php/conf.d/default.conf
 
 RUN apt-get update && apt-get install -y --no-install-recommends libfcgi-bin && rm -rf /var/lib/apt/lists/*
 
