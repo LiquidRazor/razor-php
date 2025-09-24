@@ -93,29 +93,6 @@ services:
 
 *(Configure Caddy/Nginx to proxy to `php:9000`.)*
 
-## Verify signatures (cosign)
-
-Images are **keylessly signed** via GitHub OIDC.
-
-```bash
-# Install cosign first (https://docs.sigstore.dev/cosign)
-cosign verify docker.io/liquidrazor/php:8.4.12-fpm   --certificate-identity-regexp 'https://github.com/LiquidRazor/.+'   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
-
-# GHCR mirror
-cosign verify ghcr.io/liquidrazor/php:8.4.12-fpm   --certificate-identity-regexp 'https://github.com/LiquidRazor/.+'   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
-```
-
-Expected: verification succeeds and prints the cert subject referencing a LiquidRazor GitHub workflow.
-
-## Retrieve the SBOM (SPDX)
-
-```bash
-cosign verify-attestation docker.io/liquidrazor/php:8.4.12-fpm   --type spdx   --certificate-identity-regexp 'https://github.com/LiquidRazor/.+'   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'   --output-file sbom.attestation.json
-
-# Extract just the SPDX document
-jq -r '.predicate' sbom.attestation.json > sbom.spdx.json
-```
-
 ## Environment / overrides
 
 Drop `.ini` files in `/etc/php/conf.d` (mount or bake):
