@@ -216,4 +216,4 @@ HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD \
   SCRIPT_NAME=/ping SCRIPT_FILENAME=/ping REQUEST_METHOD=GET \
   cgi-fcgi -bind -connect 127.0.0.1:9000 || exit 1
 ENTRYPOINT ["/usr/bin/tini","--"]
-CMD ["php-fpm","--nodaemonize","--fpm-config","/etc/php-fpm.conf"]
+CMD ["php-fpm","--nodaemonize","--fpm-config","/etc/php/php-fpm.conf"]
