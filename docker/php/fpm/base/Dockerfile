@@ -212,6 +212,12 @@ RUN set -eux; \
     cp -a /mods/conf.d/*.ini /etc/php/conf.d/; \
     rm -rf /mods
 
+RUN set -eux; \
+    groupadd -g 1000 app \
+    && useradd -u 1000 -g 1000 -d /app -s /usr/sbin/nologin app \
+    && mkdir -p /app \
+    && chown 1000:1000 /app;
+
 
 WORKDIR /app
 USER app
