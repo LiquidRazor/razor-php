@@ -92,7 +92,6 @@ RUN ./configure \
   --with-mhash \
   --with-openssl \
   --with-password-argon2 \
-  --with-pear \
   --with-pgsql \
   --with-pdo-pgsql \
   --with-sodium=shared \
@@ -113,7 +112,8 @@ WORKDIR /usr/local/src/modules
 RUN git clone -q https://github.com/igbinary/igbinary.git igbinary \
  && git clone -q https://github.com/phpredis/phpredis.git --branch 6.1.0 phpredis \
  && git clone -q https://github.com/krakjoe/apcu.git apcu \
- && git clone -q https://github.com/php/pecl-file_formats-yaml.git yaml
+ && git clone -q https://github.com/php/pecl-file_formats-yaml.git yaml \
+ && git clone -q https://github.com/xdebug/xdebug.git --branch 3.4.5 xdebug;
 
 # Build & install modules against /opt/php
 WORKDIR /usr/local/src/modules/igbinary
@@ -136,11 +136,16 @@ RUN /opt/php/bin/phpize \
  && ./configure --with-yaml --with-php-config=/opt/php/bin/php-config \
  && make -j "$(nproc)" && make install
 
+WORKDIR /usr/local/src/modules/yaml
+RUN /opt/php/bin/phpize \
+ && ./configure --with-php-config=/opt/php/bin/php-config \
+ && make -j "$(nproc)" && make install
+
 # Collect built artifacts for reuse (+ shared ini set)
 RUN set -eux; \
     EXT_DIR="$(/opt/php/bin/php -r 'echo ini_get("extension_dir");')"; \
     mkdir -p /mods/ext /mods/conf.d; \
-    cp -a "$EXT_DIR"/apcu.so "$EXT_DIR"/igbinary.so "$EXT_DIR"/redis.so "$EXT_DIR"/yaml.so /mods/ext/; \
+    cp -a "$EXT_DIR"/apcu.so "$EXT_DIR"/igbinary.so "$EXT_DIR"/redis.so "$EXT_DIR"/yaml.so "$EXT_DIR"/xdebug.so /mods/ext/; \
     printf "expose_php=0\nmemory_limit=256M\nmax_execution_time=120\n" > /mods/conf.d/10-base.ini; \
     printf "opcache.enable=1\nopcache.jit=tracing\nopcache.jit_buffer_size=100M\n" > /mods/conf.d/20-opcache.ini; \
     echo "extension = apcu.so"     > /mods/conf.d/15-apcu.ini; \
