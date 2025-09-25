@@ -169,7 +169,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   tini \
  && rm -rf /var/lib/apt/lists/*
 # non-root user matches pool
-RUN groupadd -r app && useradd -r -g app -s /usr/sbin/nologin app
 
 RUN mkdir -p /etc/php/conf.d
 
