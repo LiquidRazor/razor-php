@@ -136,7 +136,7 @@ RUN /opt/php/bin/phpize \
  && ./configure --with-yaml --with-php-config=/opt/php/bin/php-config \
  && make -j "$(nproc)" && make install
 
-WORKDIR /usr/local/src/modules/yaml
+WORKDIR /usr/local/src/modules/xdebug
 RUN /opt/php/bin/phpize \
  && ./configure --with-php-config=/opt/php/bin/php-config \
  && make -j "$(nproc)" && make install
