@@ -92,6 +92,7 @@ RUN ./configure \
   --with-mhash \
   --with-openssl \
   --with-password-argon2 \
+  --with-pear \
   --with-pgsql \
   --with-pdo-pgsql \
   --with-sodium=shared \
