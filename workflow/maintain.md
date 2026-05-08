@@ -6,7 +6,7 @@ It must not duplicate the project description. Use `workflow/description.md` for
 
 ## Required maintenance outputs
 
-The maintenance process must create, update, or recreate the following files under `workflow/`:
+The maintenance process must create, update, or recreate the following generated files under `workflow/`:
 
 ```text
 workflow/versions.md
@@ -15,14 +15,23 @@ workflow/maintenance-scaffold.md
 workflow/maintenance-step<index>.md
 ```
 
+The maintenance process must also create or update the following persistent repository file:
+
+```text
+workflow/build-versions.env
+```
+
+`workflow/build-versions.env` is not a disposable maintenance artifact. It is the committed workflow source of truth for concrete PHP and Debian version values used by GitHub Actions.
+
 ## Execution order
 
 Maintenance must be performed in this order:
 
 1. `workflow/versions.md`
-2. `workflow/maintenance-plan.md`
-3. `workflow/maintenance-scaffold.md`
-4. `workflow/maintenance-step<index>.md` files
+2. `workflow/build-versions.env`
+3. `workflow/maintenance-plan.md`
+4. `workflow/maintenance-scaffold.md`
+5. `workflow/maintenance-step<index>.md` files
 
 No later file may be generated before the prerequisite files it depends on have been created or updated.
 
@@ -53,9 +62,51 @@ Hardcoded versions in repository files must be treated as implementation targets
 
 Do not assume PHP or Debian versions from memory.
 
-## 2. maintenance-plan.md
+## 2. build-versions.env
 
-Create or update `workflow/maintenance-plan.md` after `workflow/versions.md` is complete.
+Create or update `workflow/build-versions.env` immediately after `workflow/versions.md` is complete.
+
+This file must contain the verified concrete version values that GitHub Actions workflows use for builds, tags, and matrix resolution.
+
+The values in `workflow/build-versions.env` must be derived only from the verified data recorded in `workflow/versions.md`.
+
+The file must use simple POSIX-compatible environment assignment syntax.
+
+Required keys:
+
+```dotenv
+PHP_LATEST=<latest stable PHP patch version>
+PHP_PREVIOUS=<previous stable PHP patch version>
+PHP_LATEST_LINE=<latest stable PHP major.minor line>
+PHP_PREVIOUS_LINE=<previous stable PHP major.minor line>
+DEBIAN_MAJOR=<latest stable Debian major version>
+DEBIAN_CODENAME=<latest stable Debian codename>
+```
+
+Example shape only:
+
+```dotenv
+PHP_LATEST=<version>
+PHP_PREVIOUS=<version>
+PHP_LATEST_LINE=<major.minor>
+PHP_PREVIOUS_LINE=<major.minor>
+DEBIAN_MAJOR=<major>
+DEBIAN_CODENAME=<codename>
+```
+
+Do not place comments, Markdown, shell logic, command substitutions, quotes, exports, or derived expressions in this file.
+
+Each line must be a plain `KEY=value` assignment.
+
+`workflow/build-versions.env` must be committed and kept after successful unattended maintenance cleanup.
+
+It must not be removed as a generated maintenance artifact.
+
+GitHub Actions workflows must use this file instead of GitHub repository variables for PHP version selection and tag generation.
+
+## 3. maintenance-plan.md
+
+Create or update `workflow/maintenance-plan.md` after `workflow/versions.md` and `workflow/build-versions.env` are complete.
 
 The maintenance plan must inspect the current repository state and identify what needs to change.
 
@@ -74,7 +125,9 @@ The plan must inspect:
 * PECL extension installation logic;
 * architecture-specific build handling;
 * image tag generation logic;
-* registry publishing logic.
+* registry publishing logic;
+* usage of GitHub repository variables for PHP version selection;
+* usage of `workflow/build-versions.env` as the workflow version source.
 
 The plan must verify that:
 
@@ -87,6 +140,8 @@ The plan must verify that:
 * PHP versions match the resolved supported PHP versions;
 * CI matrix entries match the resolved supported PHP versions;
 * published tags match the repository versioning policy;
+* workflows load PHP and Debian versions from `workflow/build-versions.env`;
+* workflows do not depend on GitHub repository variables for PHP version selection or tag generation;
 * development images inherit from or align with their matching base images;
 * CLI and FPM variants remain consistent where they should be consistent;
 * differences between CLI and FPM variants are intentional and documented.
@@ -178,7 +233,7 @@ When a required runtime library is missing:
 
 Runtime dependency updates must be recorded in `workflow/maintenance-plan.md` and represented in `workflow/maintenance-scaffold.md` before step files are generated.
 
-## 3. maintenance-scaffold.md
+## 4. maintenance-scaffold.md
 
 Create or recreate `workflow/maintenance-scaffold.md` after `workflow/maintenance-plan.md` is complete.
 
@@ -193,6 +248,7 @@ The scaffold must include:
 * dependency order between edits;
 * expected outcome per edit;
 * validation command or validation method per edit;
+* validation command or method for `workflow/build-versions.env` syntax and consistency with `workflow/versions.md`;
 * PHP `./configure` validation command or method where PHP build dependencies, extension flags, Debian baseline, PHP versions, or Dockerfiles are affected;
 * runtime shared-library validation command or method where runtime dependencies, PECL extensions, PHP extensions, Debian baseline, or Dockerfiles are affected;
 * rollback notes for risky edits;
@@ -202,7 +258,7 @@ The scaffold must not perform implementation.
 
 It must describe what will be changed clearly enough that implementation steps can be generated from it without re-analyzing the repository from scratch.
 
-## 4. maintenance-step<index>.md files
+## 5. maintenance-step<index>.md files
 
 Create or recreate numbered maintenance step files after `workflow/maintenance-scaffold.md` is complete.
 
@@ -234,6 +290,7 @@ Each step file must include:
 * files forbidden to change;
 * detailed action list;
 * validation commands;
+* required validation for `workflow/build-versions.env` when the step changes PHP versions, Debian baseline, workflow version loading, workflow matrices, or tag generation;
 * required PHP `./configure` validation when the step changes PHP versions, Debian baseline, build dependencies, extension flags, or Dockerfiles;
 * required runtime shared-library validation when the step changes runtime dependencies, PECL extensions, PHP extensions, Debian baseline, or Dockerfiles;
 * expected successful result;
@@ -250,16 +307,17 @@ Maintenance steps must be ordered so that foundational changes happen before dep
 Recommended ordering:
 
 1. version metadata and build matrix updates;
-2. Dockerfile Debian baseline updates;
-3. Dockerfile package compatibility updates;
-4. PHP source build dependency updates;
-5. PHP `./configure` validation and fixes;
-6. runtime dependency validation and fixes;
-7. PECL extension updates;
-8. development image updates;
-9. GitHub Actions workflow updates;
-10. README or documentation alignment;
-11. validation and release-preparation cleanup.
+2. `workflow/build-versions.env` update;
+3. Dockerfile Debian baseline updates;
+4. Dockerfile package compatibility updates;
+5. PHP source build dependency updates;
+6. PHP `./configure` validation and fixes;
+7. runtime dependency validation and fixes;
+8. PECL extension updates;
+9. GitHub Actions workflow updates to use `workflow/build-versions.env`;
+10. development image updates;
+11. README or documentation alignment;
+12. validation and release-preparation cleanup.
 
 The actual step order must follow the dependency chain discovered in `workflow/maintenance-scaffold.md`.
 
@@ -269,7 +327,7 @@ The maintenance workflow must not rely on stale version assumptions.
 
 The maintenance workflow must not hardcode PHP or Debian versions unless the target file requires concrete values.
 
-When concrete versions are required, they must come from `workflow/versions.md`.
+When concrete versions are required, they must come from `workflow/versions.md` and be written to `workflow/build-versions.env` when they are needed by GitHub Actions.
 
 Do not rewrite unrelated repository structure.
 
@@ -291,15 +349,22 @@ Do not treat package existence checks as proof that PHP `./configure` succeeds.
 
 Do not treat successful build dependency installation as proof that runtime shared libraries are complete.
 
+Do not use GitHub repository variables as the source of truth for PHP version selection or tag generation.
+
+Do not delete `workflow/build-versions.env` during maintenance cleanup.
+
 ## Completion requirements
 
 A maintenance run is complete only when:
 
 * `workflow/versions.md` exists and contains verified current platform versions;
+* `workflow/build-versions.env` exists and matches the verified values in `workflow/versions.md`;
 * `workflow/maintenance-plan.md` exists and reflects the inspected repository state;
 * `workflow/maintenance-scaffold.md` exists and contains the full implementation scaffold;
 * all required `workflow/maintenance-step<index>.md` files exist;
 * every generated maintenance step has clear prerequisites and validation instructions;
 * PHP `./configure` has completed successfully for affected base image configurations;
 * runtime shared-library requirements have been checked and updated where needed;
+* workflows no longer depend on GitHub repository variables for PHP version selection or tag generation;
+* workflows load concrete PHP and Debian version data from `workflow/build-versions.env`;
 * no maintenance step requires information that exists only implicitly in agent memory.

@@ -6,6 +6,7 @@ on:
     paths:
       - 'docker/php/cli/**'
       - '.github/workflows/build-cli.yml'
+      - 'workflow/build-versions.env'
   schedule:
     - cron: '0 2 * * 1'
   workflow_dispatch:
@@ -23,19 +24,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  resolve-versions:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    outputs:
+      matrix: ${{ steps.versions.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve build matrix
+        id: versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          . workflow/build-versions.env
+          printf 'matrix={"include":[{"php_version":"%s","is_latest":true},{"php_version":"%s","is_latest":false}]}\n' \
+            "$PHP_LATEST" \
+            "$PHP_PREVIOUS" >> "$GITHUB_OUTPUT"
+
   build-amd64:
+    needs: resolve-versions
     runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - var: PHP_LATEST
-            is_latest: true
-          - var: PHP_PREVIOUS
-            is_latest: false
+      matrix: ${{ fromJSON(needs.resolve-versions.outputs.matrix) }}
     env:
       ARCH_SUFFIX: amd64
-      PHP_VERSION: ${{ vars[matrix.var] }}
+      PHP_VERSION: ${{ matrix.php_version }}
       IS_LATEST: ${{ matrix.is_latest }}
     steps:
       - uses: actions/checkout@v4
@@ -111,18 +124,14 @@ jobs:
           provenance: false
 
   build-arm64:
+    needs: resolve-versions
     runs-on: blacksmith-4vcpu-ubuntu-2404-arm
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - var: PHP_LATEST
-            is_latest: true
-          - var: PHP_PREVIOUS
-            is_latest: false
+      matrix: ${{ fromJSON(needs.resolve-versions.outputs.matrix) }}
     env:
       ARCH_SUFFIX: arm64
-      PHP_VERSION: ${{ vars[matrix.var] }}
+      PHP_VERSION: ${{ matrix.php_version }}
       IS_LATEST: ${{ matrix.is_latest }}
     steps:
       - uses: actions/checkout@v4
@@ -195,17 +204,12 @@ jobs:
 
   manifest:
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: [build-amd64, build-arm64]
+    needs: [resolve-versions, build-amd64, build-arm64]
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - var: PHP_LATEST
-            is_latest: true
-          - var: PHP_PREVIOUS
-            is_latest: false
+      matrix: ${{ fromJSON(needs.resolve-versions.outputs.matrix) }}
     env:
-      PHP_VERSION: ${{ vars[matrix.var] }}
+      PHP_VERSION: ${{ matrix.php_version }}
       IS_LATEST: ${{ matrix.is_latest }}
     steps:
       - name: Setup Blacksmith Builder

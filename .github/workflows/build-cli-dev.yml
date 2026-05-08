@@ -16,27 +16,30 @@ env:
   DOCKERHUB_NS: liquidrazor
   GHCR_NS: ghcr.io/liquidrazor
 
-  # Patch versions (immutable tag source)
-  PHP_LATEST: ${{ vars.PHP_LATEST }}
-  PHP_PREVIOUS: ${{ vars.PHP_PREVIOUS }}
-
 jobs:
+  resolve-versions:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    outputs:
+      matrix: ${{ steps.versions.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve build matrix
+        id: versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          . workflow/build-versions.env
+          printf 'matrix={"include":[{"php_version":"%s","base_target":"cli","want_latest_rollup":true},{"php_version":"%s","base_target":"cli","want_latest_rollup":false}]}\n' \
+            "$PHP_LATEST" \
+            "$PHP_PREVIOUS" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: resolve-versions
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # -------- PHP LATEST --------
-          - php_version_env: PHP_LATEST
-            base_target: cli
-            # keep your intent: latest also gets the rolling "cli-dev" tag
-            want_latest_rollup: true
-          # -------- PHP PREVIOUS --------
-          - php_version_env: PHP_PREVIOUS
-            base_target: cli
-            want_latest_rollup: false
+      matrix: ${{ fromJSON(needs.resolve-versions.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -64,7 +67,7 @@ jobs:
         id: vers
         shell: bash
         run: |
-          PATCH="${{ env[matrix.php_version_env] }}"
+          PATCH="${{ matrix.php_version }}"
           LINE="${PATCH%.*}"
           echo "patch=${PATCH}" >> "$GITHUB_OUTPUT"
           echo "line=${LINE}" >> "$GITHUB_OUTPUT"
