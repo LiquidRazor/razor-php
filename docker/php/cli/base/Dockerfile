@@ -1,5 +1,5 @@
 # ===== build base stage =====
-FROM debian:bookworm-slim AS build-base
+FROM debian:trixie-slim AS build-base
 ARG PHP_VERSION
 
 # Build toolchain + headers for the extensions you enable
@@ -15,7 +15,7 @@ RUN apt-get update \
     zlib1g-dev \
     libonig-dev \
     libxml2-dev \
-    libargon2-0-dev \
+    libargon2-dev \
     libc6-dev \
     libyaml-dev \
     libpng-dev \
@@ -25,7 +25,6 @@ RUN apt-get update \
     libgmp-dev \
     libzip-dev \
     libpq-dev \
-    libc-client2007e-dev \
     libgssapi-krb5-2 \
     libkrb5-dev \
     librabbitmq-dev \
@@ -109,7 +108,7 @@ FROM build-base AS build-modules
 WORKDIR /usr/local/src/modules
 # Clone once
 RUN git clone -q https://github.com/igbinary/igbinary.git igbinary \
- && git clone -q https://github.com/phpredis/phpredis.git --branch 6.1.0 phpredis \
+ && git clone -q https://github.com/phpredis/phpredis.git --branch 6.3.0 phpredis \
  && git clone -q https://github.com/krakjoe/apcu.git apcu \
  && git clone -q https://github.com/php/pecl-file_formats-yaml.git yaml
 
@@ -148,7 +147,7 @@ RUN set -eux; \
 
 
 # ===== runtime base =====
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
   libcurl4 \
   libonig5 \
@@ -158,7 +157,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libargon2-1 \
   libpq5 \
   librabbitmq4 \
-  libzip4 \
+  libzip5 \
   libxml2 \
   libpng16-16 \
   libjpeg62-turbo \
@@ -187,7 +186,7 @@ RUN set -eux; \
   find /opt/php -type f -name '*.so' -exec strip --strip-unneeded {} + || true
 
 FROM runtime AS final
-ARG PHP_VERSION=8.4.11
+ARG PHP_VERSION=8.5.6
 
 # PHP from CLI build
 COPY --from=strip /opt/php /opt/php
@@ -212,4 +211,3 @@ RUN set -eux; \
 WORKDIR /app
 USER app
 ENTRYPOINT ["/usr/bin/tini","--"]
-

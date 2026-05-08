@@ -97,5 +97,5 @@ jobs:
             ${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.line }}-cli-dev
             docker.io/${{ env.DOCKERHUB_NS }}/php:${{ steps.vers.outputs.line }}-cli-dev
             ${{ steps.vers.outputs.tags_extra }}
-            ${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
-            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
+            ${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.patch }}-cli-dev
+            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ steps.vers.outputs.patch }}-cli-dev

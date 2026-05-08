@@ -72,7 +72,7 @@ jobs:
           if [ "${{ matrix.want_latest_rollup }}" = "true" ]; then
             {
               echo "tags_extra<<__EXTRA__"
-              echo "${{env.GHCR_NS}}/php:cli-dev"
+              echo "${{env.GHCR_NS}}/php:fpm-dev"
               echo "docker.io/${{env.DOCKERHUB_NS}}/php:fpm-dev"   # docker.io is optional but explicit
               echo "__EXTRA__"
             } >> "$GITHUB_OUTPUT"
@@ -94,8 +94,8 @@ jobs:
           # Separate caches per LINE and target
           # ---- TAGS: rolling + immutable (patch-pinned) ----
           tags: |
-            ${{ env.GHCR_NS }}/php:php-${{ steps.vers.outputs.line }}-fpm-dev
+            ${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.line }}-fpm-dev
             docker.io/${{ env.DOCKERHUB_NS }}/php:${{ steps.vers.outputs.line }}-fpm-dev
             ${{ steps.vers.outputs.tags_extra }}
-            ${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
-            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ steps.vers.outputs.patch }}-${{ matrix.base_target }}
+            ${{ env.GHCR_NS }}/php:${{ steps.vers.outputs.patch }}-fpm-dev
+            docker.io/${{ env.DOCKERHUB_NS }}/php:${{ steps.vers.outputs.patch }}-fpm-dev
