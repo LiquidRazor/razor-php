@@ -18,10 +18,11 @@ RUN apt-get update \
     libargon2-dev \
     libc6-dev \
     libyaml-dev \
+    libicu-dev \
     libpng-dev \
     libwebp-dev \
     libjpeg-dev \
-    libfreetype6-dev \
+    libfreetype-dev \
     libgmp-dev \
     libzip-dev \
     libpq-dev \
@@ -68,8 +69,6 @@ RUN  ./configure \
   --enable-intl \
   --enable-filter \
   --enable-mbstring \
-  --enable-opcache \
-  --enable-opcache-jit \
   --enable-pcntl \
   --enable-phar \
   --enable-pdo \
@@ -149,21 +148,22 @@ RUN set -eux; \
 # ===== runtime base =====
 FROM debian:trixie-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  libcurl4 \
+  libcurl4t64 \
   libonig5 \
   libedit2 \
   libsodium23 \
-  libssl3 \
+  libssl3t64 \
   libargon2-1 \
   libpq5 \
   librabbitmq4 \
   libzip5 \
   libxml2 \
-  libpng16-16 \
+  libpng16-16t64 \
   libjpeg62-turbo \
   libwebp7 \
   libfreetype6 \
   libyaml-0-2 \
+  libicu76 \
   ca-certificates \
   tini \
  && rm -rf /var/lib/apt/lists/*

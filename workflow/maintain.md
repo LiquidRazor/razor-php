@@ -34,20 +34,20 @@ This file must verify and record the current supported platform versions.
 
 It must check:
 
-- the latest stable PHP major version;
-- the immediately previous stable PHP major version;
-- the latest stable PHP patch version for each supported PHP major;
-- the latest stable Debian major version;
-- the Debian codename for the latest stable Debian major version.
+* the latest stable PHP major version;
+* the immediately previous stable PHP major version;
+* the latest stable PHP patch version for each supported PHP major;
+* the latest stable Debian major version;
+* the Debian codename for the latest stable Debian major version.
 
 The file must clearly identify:
 
-- the source used for each version decision;
-- the resolved PHP major versions;
-- the resolved PHP patch versions;
-- the resolved Debian major version;
-- the resolved Debian codename;
-- whether repository files need changes based on the resolved versions.
+* the source used for each version decision;
+* the resolved PHP major versions;
+* the resolved PHP patch versions;
+* the resolved Debian major version;
+* the resolved Debian codename;
+* whether repository files need changes based on the resolved versions.
 
 Hardcoded versions in repository files must be treated as implementation targets only after they have been verified in `workflow/versions.md`.
 
@@ -61,39 +61,122 @@ The maintenance plan must inspect the current repository state and identify what
 
 The plan must inspect:
 
-- all Dockerfiles under `docker/php/`;
-- all GitHub Actions workflows under `.github/workflows/`;
-- README references that may depend on supported PHP or Debian versions;
-- build arguments related to PHP versions;
-- build arguments related to Debian versions or Debian codenames;
-- package installation commands;
-- package names used for build dependencies;
-- package names used for runtime dependencies;
-- PECL extension installation logic;
-- architecture-specific build handling;
-- image tag generation logic;
-- registry publishing logic.
+* all Dockerfiles under `docker/php/`;
+* all GitHub Actions workflows under `.github/workflows/`;
+* README references that may depend on supported PHP or Debian versions;
+* build arguments related to PHP versions;
+* build arguments related to Debian versions or Debian codenames;
+* package installation commands;
+* package names used for build dependencies;
+* package names used for runtime dependencies;
+* PHP source extension requirements;
+* PHP `./configure` requirements for every enabled core extension;
+* PECL extension installation logic;
+* architecture-specific build handling;
+* image tag generation logic;
+* registry publishing logic.
 
 The plan must verify that:
 
-- Dockerfiles use the resolved Debian stable baseline;
-- package names are valid for the resolved Debian baseline;
-- build dependencies match the compiled PHP extensions;
-- runtime dependencies match the enabled PHP extensions;
-- PHP versions match the resolved supported PHP versions;
-- CI matrix entries match the resolved supported PHP versions;
-- published tags match the repository versioning policy;
-- development images inherit from or align with their matching base images;
-- CLI and FPM variants remain consistent where they should be consistent;
-- differences between CLI and FPM variants are intentional and documented.
+* Dockerfiles use the resolved Debian stable baseline;
+* package names are valid for the resolved Debian baseline;
+* build dependencies match the compiled PHP extensions;
+* PHP source library requirements are satisfied for every enabled extension;
+* PHP `./configure` completes successfully for each base image build configuration;
+* runtime dependencies match the enabled PHP extensions;
+* PHP versions match the resolved supported PHP versions;
+* CI matrix entries match the resolved supported PHP versions;
+* published tags match the repository versioning policy;
+* development images inherit from or align with their matching base images;
+* CLI and FPM variants remain consistent where they should be consistent;
+* differences between CLI and FPM variants are intentional and documented.
 
 The plan must separate findings into:
 
-- required changes;
-- recommended changes;
-- optional cleanup;
-- risks or compatibility concerns;
-- files that must not be changed.
+* required changes;
+* recommended changes;
+* optional cleanup;
+* risks or compatibility concerns;
+* files that must not be changed.
+
+## PHP configure validation
+
+The maintenance process must validate PHP source configuration directly.
+
+Static Dockerfile checks are not sufficient.
+
+`docker buildx build --check` is not sufficient.
+
+For every base Dockerfile changed or affected by version, Debian baseline, package, or extension updates, the maintenance process must run a real build far enough to execute PHP `./configure` with the repository's configured extension flags.
+
+This applies to:
+
+```text
+docker/php/cli/base/Dockerfile
+docker/php/fpm/base/Dockerfile
+```
+
+The `./configure` validation must confirm that all enabled PHP core extensions can find their required system libraries, headers, and package metadata.
+
+This includes, but is not limited to:
+
+* ICU requirements for `intl`;
+* image library requirements for `gd`;
+* PostgreSQL requirements for `pgsql` and `pdo_pgsql`;
+* ZIP requirements for `zip`;
+* XML requirements for XML-related extensions;
+* Sodium requirements for `sodium`;
+* Argon2 requirements where password hashing support depends on it;
+* cURL requirements for `curl`;
+* GMP requirements for `gmp`;
+* IMAP, Kerberos, and SSL requirements where IMAP is enabled;
+* YAML requirements where YAML support is built or installed.
+
+If PHP `./configure` fails:
+
+1. Treat the failure as a maintenance finding.
+2. Identify the missing library, header, or package metadata.
+3. Verify the correct Debian package from current Debian package metadata.
+4. Update build dependencies as needed.
+5. Re-check runtime library impact.
+6. Re-run `./configure` validation.
+7. Repeat until PHP `./configure` completes successfully.
+
+Do not proceed to maintenance scaffold or step generation while `./configure` is known to fail.
+
+Do not guess package names.
+
+Do not assume a development package also guarantees the correct runtime package is present in the final image.
+
+## Runtime dependency validation
+
+Whenever build dependencies are changed to satisfy PHP `./configure`, runtime dependencies must be reviewed and updated where needed.
+
+The maintenance process must determine which runtime libraries are required by the compiled PHP binaries and extensions.
+
+Runtime dependency validation must include at least one of the following approaches where available:
+
+```bash
+ldd /path/to/php
+ldd /path/to/php/extensions/*.so
+scanelf -n /path/to/php /path/to/php/extensions/*.so
+```
+
+If the build uses a multi-stage Dockerfile and removes build dependencies from the runtime image, the final runtime stage must still contain all shared libraries required by:
+
+* the PHP binary;
+* enabled core extensions;
+* installed PECL extensions;
+* FPM binaries and helpers where applicable.
+
+When a required runtime library is missing:
+
+1. Identify the owning Debian runtime package using current Debian package metadata or container-local package tools.
+2. Add or update the runtime dependency list.
+3. Rebuild or revalidate the affected image.
+4. Repeat until runtime library checks pass.
+
+Runtime dependency updates must be recorded in `workflow/maintenance-plan.md` and represented in `workflow/maintenance-scaffold.md` before step files are generated.
 
 ## 3. maintenance-scaffold.md
 
@@ -105,13 +188,15 @@ It must collect all identified changes from the maintenance plan into a structur
 
 The scaffold must include:
 
-- target files;
-- required edits per file;
-- dependency order between edits;
-- expected outcome per edit;
-- validation command or validation method per edit;
-- rollback notes for risky edits;
-- unresolved questions, if any.
+* target files;
+* required edits per file;
+* dependency order between edits;
+* expected outcome per edit;
+* validation command or validation method per edit;
+* PHP `./configure` validation command or method where PHP build dependencies, extension flags, Debian baseline, PHP versions, or Dockerfiles are affected;
+* runtime shared-library validation command or method where runtime dependencies, PECL extensions, PHP extensions, Debian baseline, or Dockerfiles are affected;
+* rollback notes for risky edits;
+* unresolved questions, if any.
 
 The scaffold must not perform implementation.
 
@@ -143,14 +228,16 @@ Each step file must contain exactly one coherent implementation unit.
 
 Each step file must include:
 
-- step objective;
-- prerequisite files or previous steps;
-- files allowed to change;
-- files forbidden to change;
-- detailed action list;
-- validation commands;
-- expected successful result;
-- failure handling notes.
+* step objective;
+* prerequisite files or previous steps;
+* files allowed to change;
+* files forbidden to change;
+* detailed action list;
+* validation commands;
+* required PHP `./configure` validation when the step changes PHP versions, Debian baseline, build dependencies, extension flags, or Dockerfiles;
+* required runtime shared-library validation when the step changes runtime dependencies, PECL extensions, PHP extensions, Debian baseline, or Dockerfiles;
+* expected successful result;
+* failure handling notes.
 
 Step files must be specific enough for an agent to execute without guessing.
 
@@ -165,12 +252,14 @@ Recommended ordering:
 1. version metadata and build matrix updates;
 2. Dockerfile Debian baseline updates;
 3. Dockerfile package compatibility updates;
-4. PHP source build updates;
-5. PECL extension updates;
-6. development image updates;
-7. GitHub Actions workflow updates;
-8. README or documentation alignment;
-9. validation and release-preparation cleanup.
+4. PHP source build dependency updates;
+5. PHP `./configure` validation and fixes;
+6. runtime dependency validation and fixes;
+7. PECL extension updates;
+8. development image updates;
+9. GitHub Actions workflow updates;
+10. README or documentation alignment;
+11. validation and release-preparation cleanup.
 
 The actual step order must follow the dependency chain discovered in `workflow/maintenance-scaffold.md`.
 
@@ -196,14 +285,21 @@ Do not make undocumented package removals.
 
 Do not remove extensions without documenting the reason in the maintenance plan.
 
+Do not treat Dockerfile syntax checks as proof that PHP can compile.
+
+Do not treat package existence checks as proof that PHP `./configure` succeeds.
+
+Do not treat successful build dependency installation as proof that runtime shared libraries are complete.
+
 ## Completion requirements
 
 A maintenance run is complete only when:
 
-- `workflow/versions.md` exists and contains verified current platform versions;
-- `workflow/maintenance-plan.md` exists and reflects the inspected repository state;
-- `workflow/maintenance-scaffold.md` exists and contains the full implementation scaffold;
-- all required `workflow/maintenance-step<index>.md` files exist;
-- every generated maintenance step has clear prerequisites and validation instructions;
-- no maintenance step requires information that exists only implicitly in agent memory.
-
+* `workflow/versions.md` exists and contains verified current platform versions;
+* `workflow/maintenance-plan.md` exists and reflects the inspected repository state;
+* `workflow/maintenance-scaffold.md` exists and contains the full implementation scaffold;
+* all required `workflow/maintenance-step<index>.md` files exist;
+* every generated maintenance step has clear prerequisites and validation instructions;
+* PHP `./configure` has completed successfully for affected base image configurations;
+* runtime shared-library requirements have been checked and updated where needed;
+* no maintenance step requires information that exists only implicitly in agent memory.
